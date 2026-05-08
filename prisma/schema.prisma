@@ -1,0 +1,109 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "mysql"
+  url      = env("DATABASE_URL")
+}
+
+enum Role {
+  ADMIN
+  EDITOR
+  VIEWER
+}
+
+enum Gender {
+  MALE
+  FEMALE
+  OTHER
+}
+
+enum RelationType {
+  PARENT_CHILD
+  SPOUSE
+}
+
+enum RelationSubType {
+  BIOLOGICAL
+  ADOPTIVE
+  GUARDIAN
+  STEP
+}
+
+model User {
+  id        String   @id @default(cuid())
+  email     String   @unique
+  password  String
+  name      String?
+  role      Role     @default(VIEWER)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([email])
+}
+
+model Clan {
+  id          String   @id @default(cuid())
+  name        String
+  description String?  @db.Text
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  persons     Person[]
+}
+
+model Person {
+  id        String    @id @default(cuid())
+  clanId    String
+  code      String    @unique
+  fullName  String
+  gender    Gender    @default(MALE)
+  birthDate DateTime?
+  deathDate DateTime?
+  generation Int      @default(1)
+  bio       String?   @db.Text
+  avatarUrl String?
+  isDeleted Boolean   @default(false)
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+
+  clan      Clan     @relation(fields: [clanId], references: [id], onDelete: Cascade)
+
+  relationsFrom Relationship[] @relation("RelationFrom")
+  relationsTo   Relationship[] @relation("RelationTo")
+  lifeEvents    LifeEvent[]
+
+  @@index([clanId, fullName])
+  @@index([clanId, generation])
+  @@unique([clanId, code])
+}
+
+model Relationship {
+  id              String          @id @default(cuid())
+  fromPersonId    String
+  toPersonId      String
+  type            RelationType
+  relationSubType RelationSubType @default(BIOLOGICAL)
+  startDate       DateTime?
+  endDate         DateTime?
+  createdAt       DateTime        @default(now())
+
+  fromPerson Person @relation("RelationFrom", fields: [fromPersonId], references: [id], onDelete: Cascade)
+  toPerson   Person @relation("RelationTo", fields: [toPersonId], references: [id], onDelete: Cascade)
+
+  @@unique([fromPersonId, toPersonId, type])
+  @@index([fromPersonId, toPersonId, type])
+}
+
+model LifeEvent {
+  id       String   @id @default(cuid())
+  personId String
+  type     String
+  date     DateTime?
+  place    String?
+  note     String?  @db.Text
+
+  person   Person   @relation(fields: [personId], references: [id], onDelete: Cascade)
+
+  @@index([personId])
+}
