@@ -128,14 +128,14 @@ export default function UsersPage({ params }: { params: { lang: string } }) {
                                         <td className="px-6 py-4 text-slate-600">{user.email}</td>
                                         <td className="px-6 py-4">
                                             <span className={`badge ${user.role === 'ADMIN' ? 'bg-purple-100 text-purple-700' :
-                                                    user.role === 'EDITOR' ? 'bg-blue-100 text-blue-700' :
-                                                        'bg-slate-100 text-slate-700'
+                                                user.role === 'EDITOR' ? 'bg-blue-100 text-blue-700' :
+                                                    'bg-slate-100 text-slate-700'
                                                 }`}>
                                                 {user.role}
                                             </span>
                                         </td>
                                         <td className="px-6 py-4 text-right">
-                                            {(session.user as any)?.email !== user.email && (
+                                            {(session?.user as any)?.email !== user.email && (
                                                 <button
                                                     onClick={() => handleDelete(user.id)}
                                                     className="text-red-500 hover:text-red-700 font-medium"
