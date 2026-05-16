@@ -18,6 +18,13 @@ export async function DELETE(
             }
         }
 
+        const targetUser = await prisma.user.findUnique({ where: { id: params.id } });
+        if (!targetUser) return NextResponse.json({ error: "User not found" }, { status: 404 });
+
+        if (session.clanId && targetUser.clanId !== session.clanId) {
+            return NextResponse.json({ error: "Unauthorized to delete this user" }, { status: 403 });
+        }
+
         await prisma.user.delete({
             where: { id: params.id },
         });

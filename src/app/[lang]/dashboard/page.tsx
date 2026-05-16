@@ -8,6 +8,7 @@ interface DashboardData {
     totalClans: number;
     totalRelationships: number;
     totalGenerations: number;
+    fundBalance?: number;
     recentMembers: any[];
 }
 
@@ -18,7 +19,7 @@ export default function DashboardPage({ params }: { params: { lang: string } }) 
 
     useEffect(() => {
         fetch("/api/dashboard")
-            .then((r) => r.json())
+            .then((r) => r.ok ? r.json() : null)
             .then(setData)
             .finally(() => setLoading(false));
     }, []);
@@ -73,6 +74,17 @@ export default function DashboardPage({ params }: { params: { lang: string } }) 
             icon: (
                 <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor">
                     <path strokeLinecap="round" strokeLinejoin="round" d="M21 8.25c0-2.485-2.099-4.5-4.688-4.5-1.935 0-3.597 1.126-4.312 2.733-.715-1.607-2.377-2.733-4.313-2.733C5.1 3.75 3 5.765 3 8.25c0 7.22 9 12 9 12s9-4.78 9-12z" />
+                </svg>
+            ),
+        },
+        {
+            label: isVi ? "Số dư quỹ" : "Fund Balance",
+            value: data ? new Intl.NumberFormat("vi-VN", { style: "currency", currency: "VND" }).format(data.fundBalance || 0) : "0 ₫",
+            color: "text-blue-600",
+            bg: "bg-blue-50",
+            icon: (
+                <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M20.25 6.375c0 2.278-3.694 4.125-8.25 4.125S3.75 8.653 3.75 6.375m16.5 0c0-2.278-3.694-4.125-8.25-4.125S3.75 4.097 3.75 6.375m16.5 0v11.25c0 2.278-3.694 4.125-8.25 4.125s-8.25-1.847-8.25-4.125V6.375m16.5 0v3.75m-16.5-3.75v3.75m16.5 0v3.75C20.25 16.153 16.556 18 12 18s-8.25-1.847-8.25-4.125v-3.75m16.5 0c0 2.278-3.694 4.125-8.25 4.125s-8.25-1.847-8.25-4.125" />
                 </svg>
             ),
         },

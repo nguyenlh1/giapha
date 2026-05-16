@@ -10,11 +10,14 @@ export async function GET() {
 
     try {
         const users = await prisma.user.findMany({
+            where: session.clanId ? { clanId: session.clanId } : undefined,
             select: {
                 id: true,
                 name: true,
                 email: true,
                 role: true,
+                clanId: true,
+                clan: { select: { name: true } },
                 createdAt: true,
             },
             orderBy: { createdAt: "desc" },
@@ -42,6 +45,7 @@ export async function POST(request: Request) {
         }
 
         const hashedPassword = await bcrypt.hash(data.password, 10);
+        const finalClanId = session.clanId ? session.clanId : (data.clanId || null);
 
         const user = await prisma.user.create({
             data: {
@@ -49,6 +53,7 @@ export async function POST(request: Request) {
                 email: data.email,
                 password: hashedPassword,
                 role: data.role,
+                clanId: finalClanId,
             },
         });
 

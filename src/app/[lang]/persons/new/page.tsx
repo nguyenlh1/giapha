@@ -23,7 +23,7 @@ export default function NewPersonPage({ params }: { params: { lang: string } }) 
     });
 
     useEffect(() => {
-        fetch("/api/clans").then(r => r.json()).then(setClans);
+        fetch("/api/clans").then(r => r.ok ? r.json() : []).then(setClans);
     }, []);
 
     useEffect(() => {

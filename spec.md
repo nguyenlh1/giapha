@@ -47,10 +47,22 @@ Thống kê nhanh các chỉ số hệ thống:
 - Tổng số lượng thành viên, Thế hệ lớn nhất, Số lượng mối quan hệ và dòng họ.
 - Liệt kê 5 thành viên được thêm gần nhất vào hệ thống.
 
+### 3.7. Quản lý Tài chính Dòng họ (Clan Finance)
+Theo dõi minh bạch nguồn quỹ, đóng góp của thành viên và chi tiêu cho các hoạt động dòng họ.
+- **Giao dịch (`Transaction`)**: Mỗi giao dịch thuộc 1 trong 2 loại:
+  - `CONTRIBUTION`: Đóng góp (thu vào quỹ).
+  - `EXPENSE`: Chi tiêu (chi ra từ quỹ).
+- **Danh mục**: `ANNIVERSARY` (Lễ giỗ), `CONSTRUCTION` (Xây dựng), `SCHOLARSHIP` (Học bổng), `REPAIR` (Sửa chữa), `CHARITY` (Từ thiện), `EVENT` (Sự kiện), `OTHER` (Khác).
+- **Liên kết thành viên**: Giao dịch đóng góp có thể liên kết với `Person` cụ thể (người đóng góp).
+- **Dashboard Tài chính**: Hiển thị 4 thẻ thống kê (tổng thu, tổng chi, số dư quỹ, giao dịch tháng này), biểu đồ cột thu/chi 6 tháng, bảng giao dịch gần đây.
+- **Báo cáo**: Bộ lọc theo thời gian/danh mục/loại, biểu đồ tròn phân bổ, xuất Excel.
+- **Phân quyền**: `ADMIN` và `EDITOR` được thêm/sửa/xóa giao dịch. `VIEWER` chỉ xem.
+
 ## 4. Kiến trúc cơ sở dữ liệu (Database Schema)
 Các thực thể chính:
 - `User`: Lưu thông tin đăng nhập, phân quyền.
 - `Clan`: Định nghĩa dòng họ (VD: Dòng họ Nguyễn).
-- `Person`: Thông tin cá nân (`clanId` liên kết với Clan). Có index kết hợp trên `(clanId, code)` để đảm bảo mã duy nhất trong dòng họ.
+- `Person`: Thông tin cá nhân (`clanId` liên kết với Clan). Có index kết hợp trên `(clanId, code)` để đảm bảo mã duy nhất trong dòng họ.
 - `Relationship`: Thực thể kết nối hai `Person` bằng loại quan hệ (`type`).
-- `LifeEvent` (Mở rộng tính năng sau này): Sử dụng để lưu các dự kiện mốc thời gian cụ thể của một cá nhân.
+- `Transaction`: Ghi nhận giao dịch tài chính (đóng góp hoặc chi tiêu) của dòng họ, liên kết với `Clan` và tùy chọn liên kết với `Person`.
+- `LifeEvent` (Mở rộng tính năng sau này): Sử dụng để lưu các sự kiện mốc thời gian cụ thể của một cá nhân.

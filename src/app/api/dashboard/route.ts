@@ -6,13 +6,21 @@ export async function GET() {
     const user = await getSessionUser();
     if (!user) return unauthorized();
 
-    const [totalMembers, totalClans, totalRelationships, maxGen] = await Promise.all([
+    const [totalMembers, totalClans, totalRelationships, maxGen, contributions, expenses] = await Promise.all([
         prisma.person.count({ where: { isDeleted: false } }),
         prisma.clan.count(),
         prisma.relationship.count(),
         prisma.person.aggregate({
             _max: { generation: true },
             where: { isDeleted: false },
+        }),
+        prisma.transaction.aggregate({
+            _sum: { amount: true },
+            where: { type: "CONTRIBUTION" },
+        }),
+        prisma.transaction.aggregate({
+            _sum: { amount: true },
+            where: { type: "EXPENSE" },
         }),
     ]);
 
@@ -23,11 +31,15 @@ export async function GET() {
         include: { clan: true },
     });
 
+    const fundBalance = Number(contributions._sum.amount || 0) - Number(expenses._sum.amount || 0);
+
     return NextResponse.json({
         totalMembers,
         totalClans,
         totalRelationships,
         totalGenerations: maxGen._max.generation || 0,
+        fundBalance,
         recentMembers,
     });
 }
+

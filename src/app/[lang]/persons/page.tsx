@@ -31,8 +31,9 @@ export default function PersonsPage({ params }: { params: { lang: string } }) {
         const qs = new URLSearchParams({ page: String(page), limit: "20" });
         if (search) qs.set("search", search);
         if (generation) qs.set("generation", generation);
-        fetch(`/api/persons?${qs}`)
-            .then((r) => r.json())
+        const queryParams = qs.toString();
+        fetch(`/api/persons${queryParams ? `?${queryParams}` : ""}`)
+            .then((r) => r.ok ? r.json() : { persons: [], total: 0 })
             .then((d) => { setPersons(d.persons || []); setTotal(d.total || 0); })
             .finally(() => setLoading(false));
     };

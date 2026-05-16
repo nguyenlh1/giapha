@@ -7,6 +7,7 @@ export type SessionUser = {
     email: string;
     name: string | null;
     role: "ADMIN" | "EDITOR" | "VIEWER";
+    clanId: string | null;
 };
 
 export async function getSessionUser(): Promise<SessionUser | null> {
@@ -35,4 +36,16 @@ export async function requireAdmin(): Promise<SessionUser | null> {
     const user = await getSessionUser();
     if (!user || user.role !== "ADMIN") return null;
     return user;
+}
+
+export function hasClanAccess(user: SessionUser | null, clanId: string): boolean {
+    if (!user) return false;
+    // clanId null means System-level access (views/edits all clans)
+    if (!user.clanId) return true;
+    return user.clanId === clanId;
+}
+
+export function canWriteClan(user: SessionUser | null, clanId: string): boolean {
+    if (!user || !hasClanAccess(user, clanId)) return false;
+    return canWrite(user.role);
 }

@@ -18,7 +18,7 @@ export default function ImportExportPage({ params }: { params: { lang: string } 
         try {
             const res = await fetch("/api/export");
             if (!res.ok) throw new Error("Export failed");
-            const data = await res.json();
+            const data = await res.json().catch(() => ({}));
             const blob = new Blob([JSON.stringify(data, null, 2)], { type: "application/json" });
             const url = URL.createObjectURL(blob);
             const a = document.createElement("a");
@@ -48,7 +48,7 @@ export default function ImportExportPage({ params }: { params: { lang: string } 
                 body: JSON.stringify(data),
             });
             if (!res.ok) {
-                const err = await res.json();
+                const err = await res.json().catch(() => ({}));
                 throw new Error(err.error || "Import failed");
             }
             setMessage({ type: "success", text: isVi ? "Nhập dữ liệu thành công!" : "Data imported successfully!" });

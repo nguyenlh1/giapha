@@ -7,6 +7,7 @@ export async function GET() {
     if (!user) return unauthorized();
 
     const clans = await prisma.clan.findMany({
+        where: user.clanId ? { id: user.clanId } : undefined,
         include: {
             _count: { select: { persons: true } },
         },

@@ -7,7 +7,8 @@ export async function GET(request: NextRequest) {
     if (!user) return unauthorized();
 
     const { searchParams } = new URL(request.url);
-    const clanId = searchParams.get("clanId");
+    const requestedClanId = searchParams.get("clanId");
+    const clanId = user.clanId || requestedClanId;
 
     if (!clanId) {
         return NextResponse.json({ error: "clanId is required" }, { status: 400 });
@@ -21,7 +22,7 @@ export async function GET(request: NextRequest) {
     const relationships = await prisma.relationship.findMany({
         where: {
             fromPerson: { clanId, isDeleted: false },
-            toPerson: { isDeleted: false },
+            toPerson: { clanId, isDeleted: false },
         },
     });
 

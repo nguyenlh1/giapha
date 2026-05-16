@@ -27,14 +27,14 @@ export default function PersonDetailPage({ params }: { params: { lang: string; i
     const fetchPerson = () => {
         setLoading(true);
         fetch(`/api/persons/${params.id}`)
-            .then(r => r.json())
+            .then(r => r.ok ? r.json() : null)
             .then(d => { setPerson(d); setForm(d); })
             .finally(() => setLoading(false));
     };
 
     useEffect(() => { fetchPerson(); }, [params.id]);
     useEffect(() => {
-        fetch("/api/persons?limit=200").then(r => r.json()).then(d => setAllPersons(d.persons || []));
+        fetch("/api/persons?limit=200").then(r => r.ok ? r.json() : { persons: [] }).then(d => setAllPersons(d.persons || []));
     }, []);
 
     const handleSave = async () => {

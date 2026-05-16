@@ -9,25 +9,34 @@ export default function UsersPage({ params }: { params: { lang: string } }) {
     const isAdmin = (session?.user as any)?.role === "ADMIN";
 
     const [users, setUsers] = useState<any[]>([]);
+    const [clans, setClans] = useState<any[]>([]);
     const [loading, setLoading] = useState(true);
 
     // Modal state
     const [isModalOpen, setIsModalOpen] = useState(false);
-    const [formData, setFormData] = useState({ name: "", email: "", password: "", role: "VIEWER" });
+    const [formData, setFormData] = useState({ name: "", email: "", password: "", role: "VIEWER", clanId: "" });
     const [submitError, setSubmitError] = useState("");
     const [submitting, setSubmitting] = useState(false);
+
+    const currentUserClanId = (session?.user as any)?.clanId;
 
     useEffect(() => {
         if (!isAdmin) return;
         fetchUsers();
+        fetchClans();
     }, [isAdmin]);
+
+    const fetchClans = async () => {
+        const res = await fetch("/api/clans");
+        if (res.ok) setClans(await res.json());
+    };
 
     const fetchUsers = async () => {
         setLoading(true);
         try {
             const res = await fetch("/api/users");
             if (res.ok) {
-                const data = await res.json();
+                const data = await res.json().catch(() => ({}));
                 setUsers(data);
             }
         } finally {
@@ -43,7 +52,7 @@ export default function UsersPage({ params }: { params: { lang: string } }) {
             if (res.ok) {
                 setUsers(users.filter(u => u.id !== id));
             } else {
-                const err = await res.json();
+                const err = await res.json().catch(() => ({}));
                 alert(err.error || "Cannot delete user");
             }
         } catch (e) {
@@ -57,18 +66,21 @@ export default function UsersPage({ params }: { params: { lang: string } }) {
         setSubmitError("");
 
         try {
+            const payload = { ...formData };
+            if (!payload.clanId) delete (payload as any).clanId;
+
             const res = await fetch("/api/users", {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
-                body: JSON.stringify(formData),
+                body: JSON.stringify(payload),
             });
 
             if (res.ok) {
                 setIsModalOpen(false);
-                setFormData({ name: "", email: "", password: "", role: "VIEWER" });
+                setFormData({ name: "", email: "", password: "", role: "VIEWER", clanId: currentUserClanId || "" });
                 fetchUsers();
             } else {
-                const err = await res.json();
+                const err = await res.json().catch(() => ({}));
                 setSubmitError(err.error || "Failed to create user");
             }
         } catch {
@@ -117,6 +129,7 @@ export default function UsersPage({ params }: { params: { lang: string } }) {
                                 <tr>
                                     <th className="px-6 py-4">{isVi ? "Tên Hiển Thị" : "Name"}</th>
                                     <th className="px-6 py-4">Email</th>
+                                    <th className="px-6 py-4">{isVi ? "Dòng họ" : "Clan"}</th>
                                     <th className="px-6 py-4">{isVi ? "Quyền" : "Role"}</th>
                                     <th className="px-6 py-4 text-right">{isVi ? "Hành động" : "Actions"}</th>
                                 </tr>
@@ -126,6 +139,9 @@ export default function UsersPage({ params }: { params: { lang: string } }) {
                                     <tr key={user.id} className="hover:bg-slate-50/50 transition-colors">
                                         <td className="px-6 py-4 font-medium text-slate-900">{user.name}</td>
                                         <td className="px-6 py-4 text-slate-600">{user.email}</td>
+                                        <td className="px-6 py-4 text-slate-600">
+                                            {user.clan?.name ? user.clan.name : <span className="text-slate-400 italic">{isVi ? "Toàn hệ thống (System)" : "All (System)"}</span>}
+                                        </td>
                                         <td className="px-6 py-4">
                                             <span className={`badge ${user.role === 'ADMIN' ? 'bg-purple-100 text-purple-700' :
                                                 user.role === 'EDITOR' ? 'bg-blue-100 text-blue-700' :
@@ -206,6 +222,25 @@ export default function UsersPage({ params }: { params: { lang: string } }) {
                                     className="input-field"
                                     placeholder="••••••••"
                                 />
+                            </div>
+
+                            <div>
+                                <label className="block text-sm font-medium text-slate-700 mb-1">{isVi ? "Quản lý Dòng họ" : "Managed Clan"}</label>
+                                <select
+                                    value={formData.clanId}
+                                    onChange={e => setFormData({ ...formData, clanId: e.target.value })}
+                                    className="input-field"
+                                    disabled={!!currentUserClanId}
+                                >
+                                    <option value="">{isVi ? "-- Toàn hệ thống (Super Admin) --" : "-- Entire System (Super Admin) --"}</option>
+                                    {clans.map(c => (
+                                        <option key={c.id} value={c.id}>{c.name}</option>
+                                    ))}
+                                </select>
+                                <p className="text-xs text-slate-500 mt-2">
+                                    {isVi ? "Để trống nếu muốn cấp quyền quản trị tất cả các dòng họ." : "Leave empty to grant access to all clans."}
+                                    {currentUserClanId && (isVi ? " Bạn chỉ có thể tạo tài khoản cho dòng họ của bạn." : " You can only create users for your clan.")}
+                                </p>
                             </div>
 
                             <div>

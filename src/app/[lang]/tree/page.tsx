@@ -1,9 +1,7 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useState, useRef } from "react";
 import Link from "next/link";
-
-export const dynamic = 'force-dynamic';
 import ReactFlow, {
     Controls,
     Background,
@@ -21,12 +19,12 @@ import dagre from "dagre";
 import "reactflow/dist/style.css";
 
 const nodeWidth = 280;
-const nodeHeight = 105;
+const nodeHeight = 115;
 
 function getLayoutedElements(nodes: Node[], edges: Edge[], isVi: boolean) {
     const g = new dagre.graphlib.Graph();
     g.setDefaultEdgeLabel(() => ({}));
-    g.setGraph({ rankdir: "TB", nodesep: 140, ranksep: 100, edgesep: 60 });
+    g.setGraph({ rankdir: "TB", nodesep: 150, ranksep: 100, edgesep: 60 });
 
     nodes.forEach((node) => {
         g.setNode(node.id, { width: nodeWidth, height: nodeHeight });
@@ -99,6 +97,17 @@ function PersonNode({ data }: { data: any }) {
             </div>
 
             <Handle type="source" position={Position.Bottom} className="w-3.5 h-3.5 border-2 border-white !bg-slate-500" />
+
+            {/* Collapse/Expand Toggle Button */}
+            {data.hasChildren && (
+                <button
+                    onClick={(e) => { e.stopPropagation(); data.onToggleCollapse?.(); }}
+                    className="absolute -bottom-3.5 left-1/2 -translate-x-1/2 bg-white border-2 border-slate-300 w-7 h-7 rounded-full flex items-center justify-center text-slate-600 hover:text-primary-600 hover:border-primary-400 z-10 shadow-sm transition-colors cursor-pointer font-bold pb-0.5"
+                    title={data.isCollapsed ? (isVi ? "Mở rộng nhánh" : "Expand branch") : (isVi ? "Thu gọn nhánh" : "Collapse branch")}
+                >
+                    {data.isCollapsed ? "+" : "−"}
+                </button>
+            )}
         </div>
     );
 }
@@ -114,67 +123,228 @@ export default function TreePage({ params }: { params: { lang: string } }) {
     const [loading, setLoading] = useState(false);
     const [selectedPerson, setSelectedPerson] = useState<any | null>(null);
 
+    // State for filtering & collapsing
+    const [rawNodes, setRawNodes] = useState<Node[]>([]);
+    const [rawEdges, setRawEdges] = useState<any[]>([]);
+    const [maxGenLimit, setMaxGenLimit] = useState<number>(1);
+    const [currentMaxGen, setCurrentMaxGen] = useState<number>(1);
+    const [collapsedNodes, setCollapsedNodes] = useState<Set<string>>(new Set());
+
+    // React Flow instance for manual camera controls
+    const [rfInstance, setRfInstance] = useState<any>(null);
+
+    // Fullscreen state and ref
+    const containerRef = useRef<HTMLDivElement>(null);
+    const [isFullscreen, setIsFullscreen] = useState(false);
+
     useEffect(() => {
-        fetch("/api/clans").then(r => r.json()).then((data) => {
-            setClans(data);
-            if (data.length > 0) setSelectedClan(data[0].id);
-        });
+        const handleFullscreenChange = () => {
+            setIsFullscreen(!!document.fullscreenElement);
+        };
+        document.addEventListener("fullscreenchange", handleFullscreenChange);
+        return () => document.removeEventListener("fullscreenchange", handleFullscreenChange);
+    }, []);
+
+    const toggleFullscreen = () => {
+        if (!document.fullscreenElement) {
+            containerRef.current?.requestFullscreen?.().catch(err => {
+                console.error("Error attempting to enable fullscreen:", err);
+            });
+        } else {
+            document.exitFullscreen?.();
+        }
+    };
+
+    useEffect(() => {
+        fetch("/api/clans").then(r => {
+            if (!r.ok) return [];
+            return r.json().catch(() => []); // Fallback for bad JSON
+        }).then((data) => {
+            setClans(data || []);
+            if (data && data.length > 0) setSelectedClan(data[0].id);
+        }).catch(err => console.error("Error fetching clans:", err));
     }, []);
 
     useEffect(() => {
         if (!selectedClan) return;
         setLoading(true);
         fetch(`/api/tree?clanId=${selectedClan}`)
-            .then(r => r.json())
+            .then(async r => {
+                if (!r.ok) throw new Error("API not ok");
+                return r.json();
+            })
             .then((data) => {
-                const { nodes: layoutedNodes, edges: layoutedEdges } = getLayoutedElements(
-                    data.nodes || [],
-                    (data.edges || []).map((e: any) => ({
-                        ...e,
-                        label: e.isSpouse ? (isVi ? "Vợ chồng" : "Spouse") : (
-                            e.relationSubType === "ADOPTIVE" ? (isVi ? "Con nuôi" : "Adoptive") :
-                                e.relationSubType === "STEP" ? (isVi ? "Con kế" : "Stepchild") :
-                                    e.relationSubType === "GUARDIAN" ? (isVi ? "Giám hộ" : "Ward") :
-                                        (isVi ? "Con" : "Child")
-                        ),
-                        labelStyle: { fill: e.isSpouse ? '#f59e0b' : '#3b82f6', fontWeight: 600, fontSize: 10 },
-                        labelBgStyle: { fill: 'white', fillOpacity: 0.9 },
-                        markerEnd: {
-                            type: MarkerType.ArrowClosed,
-                            color: e.style?.stroke || '#cbd5e1'
-                        },
-                    })),
-                    isVi
-                );
-                setNodes(layoutedNodes);
-                setEdges(layoutedEdges);
+                const apiNodes = data.nodes || [];
+                const maxGen = apiNodes.reduce((max: number, node: any) => Math.max(max, node.data.generation || 1), 1);
+
+                setMaxGenLimit(maxGen);
+                setCurrentMaxGen(maxGen);
+                setCollapsedNodes(new Set());
+                setRawNodes(apiNodes);
+
+                const apiEdges = (data.edges || []).map((e: any) => ({
+                    ...e,
+                    label: e.isSpouse ? (isVi ? "Vợ chồng" : "Spouse") : (
+                        e.relationSubType === "ADOPTIVE" ? (isVi ? "Con nuôi" : "Adoptive") :
+                            e.relationSubType === "STEP" ? (isVi ? "Con kế" : "Stepchild") :
+                                e.relationSubType === "GUARDIAN" ? (isVi ? "Giám hộ" : "Ward") :
+                                    (isVi ? "Con" : "Child")
+                    ),
+                    labelStyle: { fill: e.isSpouse ? '#f59e0b' : '#3b82f6', fontWeight: 600, fontSize: 10 },
+                    labelBgStyle: { fill: 'white', fillOpacity: 0.9 },
+                    markerEnd: {
+                        type: MarkerType.ArrowClosed,
+                        color: e.style?.stroke || '#cbd5e1'
+                    },
+                }));
+                setRawEdges(apiEdges);
                 setSelectedPerson(null);
+            })
+            .catch(err => {
+                console.error("Failed to load tree data:", err);
+                setRawNodes([]);
+                setRawEdges([]);
             })
             .finally(() => setLoading(false));
     }, [selectedClan, isVi]);
 
+    // Apply generation filter, collapses, and dagre layout
+    useEffect(() => {
+        if (!rawNodes.length) return;
+
+        // 1. Filter by Max Generation Slider
+        let visibleNodes = rawNodes.filter(n => n.data.generation <= currentMaxGen);
+
+        // 2. Filter by Node Collapses
+        const hiddenIds = new Set<string>();
+        const traverseToHide = (nodeId: string) => {
+            const childEdges = rawEdges.filter(e => e.source === nodeId && !e.isSpouse);
+            childEdges.forEach(e => {
+                if (!hiddenIds.has(e.target)) {
+                    hiddenIds.add(e.target);
+                    // Recursively hide descendants
+                    traverseToHide(e.target);
+                }
+            });
+        };
+
+        // For each collapsed node that is visible, hide all descendants
+        collapsedNodes.forEach(id => {
+            if (visibleNodes.some(n => n.id === id)) {
+                traverseToHide(id);
+            }
+        });
+
+        visibleNodes = visibleNodes.filter(n => !hiddenIds.has(n.id));
+        const visibleNodeIds = new Set(visibleNodes.map(n => n.id));
+        const visibleEdges = rawEdges.filter(e => visibleNodeIds.has(e.source) && visibleNodeIds.has(e.target));
+
+        // Inject computed data and handlers into nodes
+        const finalNodes = visibleNodes.map(n => {
+            const hasChildren = rawEdges.some(e => e.source === n.id && !e.isSpouse);
+            return {
+                ...n,
+                data: {
+                    ...n.data,
+                    hasChildren,
+                    isCollapsed: collapsedNodes.has(n.id),
+                    onToggleCollapse: () => {
+                        setCollapsedNodes(prev => {
+                            const next = new Set(prev);
+                            if (next.has(n.id)) next.delete(n.id);
+                            else next.add(n.id);
+                            return next;
+                        });
+                    }
+                }
+            };
+        });
+
+        const { nodes: layoutedNodes, edges: layoutedEdges } = getLayoutedElements(finalNodes, visibleEdges, isVi);
+        setNodes(layoutedNodes);
+        setEdges(layoutedEdges);
+
+        // Autofocus logically
+        if (rfInstance && layoutedNodes.length > 0) {
+            setTimeout(() => {
+                const topNodes = layoutedNodes.filter(n => n.data.generation <= 2);
+                if (topNodes.length > 0) {
+                    rfInstance.fitView({
+                        nodes: topNodes,
+                        padding: 0.4,
+                        maxZoom: 0.9,
+                        duration: 800
+                    });
+                } else {
+                    rfInstance.fitView({ padding: 0.4, maxZoom: 0.9, duration: 800 });
+                }
+            }, 50);
+        }
+
+    }, [rawNodes, rawEdges, currentMaxGen, collapsedNodes, isVi, setNodes, setEdges, rfInstance]);
+
     const onNodeClick = useCallback((event: React.MouseEvent, node: Node) => {
+        // Prevent toggle button click from triggering node selection
+        if ((event.target as HTMLElement).tagName.toLowerCase() === 'button') {
+            return;
+        }
         setSelectedPerson(node.data);
     }, []);
 
     const selectedPersonNodeId = Object.values(nodes).find((n: any) => n.data?.code === selectedPerson?.code)?.id;
 
     return (
-        <div className="h-[calc(100vh-8rem)] relative flex overflow-hidden rounded-xl border border-slate-200/60 shadow-lg bg-white">
+        <div ref={containerRef} className={`${isFullscreen ? 'fixed inset-0 z-[100] rounded-none m-0' : 'h-[calc(100vh-8rem)] relative rounded-xl'} flex overflow-hidden border border-slate-200/60 shadow-lg bg-white w-full`}>
             <div className="flex-1 flex flex-col min-w-0">
-                <div className="flex items-center justify-between p-4 border-b border-slate-100 bg-slate-50/50">
-                    <h1 className="text-xl font-bold text-slate-900">
+                <div className="flex items-center gap-4 p-4 border-b border-slate-100 bg-slate-50/50 flex-wrap">
+                    <h1 className="text-xl font-bold text-slate-900 shrink-0">
                         {isVi ? "Cây gia phả" : "Family Tree"}
                     </h1>
                     <select
                         value={selectedClan}
                         onChange={e => setSelectedClan(e.target.value)}
-                        className="input-field w-64 shadow-sm"
+                        className="input-field w-56 shadow-sm shrink-0"
                     >
                         {clans.map(c => (
                             <option key={c.id} value={c.id}>{c.name}</option>
                         ))}
                     </select>
+
+                    <div className="w-px h-6 bg-slate-200 mx-2 hidden sm:block" />
+
+                    {/* Generation Filter Slider */}
+                    {maxGenLimit > 1 && (
+                        <div className="flex items-center gap-3 bg-white px-4 py-1.5 rounded-lg border border-slate-200 shadow-sm flex-1 min-w-[250px]">
+                            <span className="text-sm font-medium text-slate-600 shrink-0">
+                                {isVi ? "Hiển thị đến thế hệ:" : "Show up to Gen:"} <span className="text-primary-600 font-bold">{currentMaxGen}</span>
+                            </span>
+                            <input
+                                type="range"
+                                min={1}
+                                max={maxGenLimit}
+                                value={currentMaxGen}
+                                onChange={(e) => setCurrentMaxGen(parseInt(e.target.value))}
+                                className="w-full accent-primary-600"
+                            />
+                        </div>
+                    )}
+
+                    {/* Full Screen Toggle Button */}
+                    <button
+                        onClick={toggleFullscreen}
+                        className="p-1.5 sm:p-2 sm:ml-auto bg-white rounded-lg border border-slate-200 shadow-sm text-slate-600 hover:text-primary-600 hover:bg-slate-50 transition-colors shrink-0"
+                        title={isVi ? (isFullscreen ? "Thu nhỏ màn hình" : "Toàn màn hình") : (isFullscreen ? "Exit Full Screen" : "Full Screen")}
+                    >
+                        {isFullscreen ? (
+                            <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor">
+                                <path strokeLinecap="round" strokeLinejoin="round" d="M9 9V4.5M9 9H4.5M9 9L3.75 3.75M9 15v4.5M9 15H4.5M9 15l-5.25 5.25M15 9h4.5M15 9V4.5M15 9l5.25-5.25M15 15h4.5M15 15v4.5m0-4.5l5.25 5.25" />
+                            </svg>
+                        ) : (
+                            <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor">
+                                <path strokeLinecap="round" strokeLinejoin="round" d="M3.75 3.75v4.5m0-4.5h4.5m-4.5 0L9 9M3.75 20.25v-4.5m0 4.5h4.5m-4.5 0L9 15M20.25 3.75h-4.5m4.5 0v4.5m0-4.5L15 9m5.25 11.25h-4.5m4.5 0v-4.5m0 4.5L15 15" />
+                            </svg>
+                        )}
+                    </button>
                 </div>
 
                 <div className="flex-1 relative">
@@ -190,8 +360,8 @@ export default function TreePage({ params }: { params: { lang: string } }) {
                             onEdgesChange={onEdgesChange}
                             nodeTypes={nodeTypes}
                             onNodeClick={onNodeClick}
+                            onInit={setRfInstance}
                             connectionMode={ConnectionMode.Loose}
-                            fitView
                             minZoom={0.1}
                             maxZoom={1.5}
                             className="bg-slate-50/30"

@@ -8,6 +8,7 @@ export async function GET() {
     if (!canWrite(user.role)) return forbidden();
 
     const clans = await prisma.clan.findMany({
+        where: user.clanId ? { id: user.clanId } : undefined,
         include: { persons: { include: { lifeEvents: true } } },
     });
     const relationships = await prisma.relationship.findMany();

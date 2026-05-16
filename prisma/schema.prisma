@@ -37,19 +37,26 @@ model User {
   password  String
   name      String?
   role      Role     @default(VIEWER)
+  clanId    String?
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
+  clan      Clan?    @relation(fields: [clanId], references: [id], onDelete: SetNull)
+
   @@index([email])
+  @@index([clanId])
 }
 
 model Clan {
-  id          String   @id @default(cuid())
-  name        String
-  description String?  @db.Text
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
-  persons     Person[]
+  id                String            @id @default(cuid())
+  name              String
+  description       String?           @db.Text
+  createdAt         DateTime          @default(now())
+  updatedAt         DateTime          @updatedAt
+  persons           Person[]
+  transactions      Transaction[]
+  users             User[]
+  financeCategories FinanceCategory[]
 }
 
 model Person {
@@ -72,6 +79,7 @@ model Person {
   relationsFrom Relationship[] @relation("RelationFrom")
   relationsTo   Relationship[] @relation("RelationTo")
   lifeEvents    LifeEvent[]
+  transactions  Transaction[]
 
   @@index([clanId, fullName])
   @@index([clanId, generation])
@@ -106,4 +114,47 @@ model LifeEvent {
   person   Person   @relation(fields: [personId], references: [id], onDelete: Cascade)
 
   @@index([personId])
+}
+
+enum TransactionType {
+  CONTRIBUTION
+  EXPENSE
+}
+
+model FinanceCategory {
+  id        String          @id @default(cuid())
+  clanId    String
+  name      String
+  type      TransactionType
+  createdAt DateTime        @default(now())
+  updatedAt DateTime        @updatedAt
+
+  clan         Clan          @relation(fields: [clanId], references: [id], onDelete: Cascade)
+  transactions Transaction[]
+
+  @@unique([clanId, name, type])
+}
+
+model Transaction {
+  id          String              @id @default(cuid())
+  clanId      String
+  type        TransactionType
+  categoryId  String
+  amount      Decimal             @db.Decimal(15, 2)
+  date        DateTime            @db.Date
+  personId    String?
+  description String?             @db.Text
+  receiptUrl  String?
+  createdBy   String
+  createdAt   DateTime            @default(now())
+  updatedAt   DateTime            @updatedAt
+
+  clan     Clan             @relation(fields: [clanId], references: [id], onDelete: Cascade)
+  person   Person?          @relation(fields: [personId], references: [id], onDelete: SetNull)
+  category FinanceCategory  @relation(fields: [categoryId], references: [id], onDelete: Cascade)
+
+  @@index([clanId, date])
+  @@index([clanId, type])
+  @@index([personId])
+  @@index([categoryId])
 }

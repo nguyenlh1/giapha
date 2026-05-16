@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { getSessionUser, unauthorized, forbidden, canWrite } from "@/lib/rbac";
+import { getSessionUser, unauthorized, forbidden, canWrite, hasClanAccess } from "@/lib/rbac";
 import { personCreateSchema } from "@/lib/validations";
 
 export async function GET(request: NextRequest) {
@@ -16,7 +16,12 @@ export async function GET(request: NextRequest) {
     const skip = (page - 1) * limit;
 
     const where: any = { isDeleted: false };
-    if (clanId) where.clanId = clanId;
+    if (user.clanId) {
+        where.clanId = user.clanId; // Strictly enforce
+    } else if (clanId) {
+        where.clanId = clanId;
+    }
+
     if (search) {
         where.OR = [
             { fullName: { contains: search } },
@@ -41,8 +46,7 @@ export async function GET(request: NextRequest) {
 
 export async function POST(request: NextRequest) {
     const user = await getSessionUser();
-    if (!user) return unauthorized();
-    if (!canWrite(user.role)) return forbidden();
+    if (!user || user.role === "VIEWER") return forbidden();
 
     const body = await request.json();
     const parsed = personCreateSchema.safeParse(body);
@@ -51,6 +55,8 @@ export async function POST(request: NextRequest) {
     }
 
     const data = parsed.data;
+    if (!hasClanAccess(user, data.clanId)) return forbidden();
+
     const person = await prisma.person.create({
         data: {
             clanId: data.clanId,
