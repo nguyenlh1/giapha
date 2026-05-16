@@ -22,7 +22,7 @@ export async function GET(request: NextRequest) {
         where.clanId = clanId;
     }
     if (type) where.type = type;
-    if (category) where.category = category;
+    if (category) where.categoryId = category;
     if (dateFrom || dateTo) {
         where.date = {};
         if (dateFrom) where.date.gte = new Date(dateFrom);
@@ -46,8 +46,8 @@ export async function GET(request: NextRequest) {
         where: { id: { in: categoryIds } }
     });
 
-    const categoryData = categoryBreakdown.map((item) => {
-        const cat = categories.find(c => c.id === item.categoryId);
+    const categoryData = categoryBreakdown.map((item: any) => {
+        const cat = categories.find((c: any) => c.id === item.categoryId);
         return {
             category: item.categoryId,
             labelVi: cat?.name || "Unknown",

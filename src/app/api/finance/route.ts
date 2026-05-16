@@ -24,7 +24,7 @@ export async function GET(request: NextRequest) {
     }
 
     if (type) where.type = type;
-    if (category) where.category = category;
+    if (category) where.categoryId = category;
     if (dateFrom || dateTo) {
         where.date = {};
         if (dateFrom) where.date.gte = new Date(dateFrom);
@@ -37,6 +37,7 @@ export async function GET(request: NextRequest) {
             include: {
                 clan: { select: { id: true, name: true } },
                 person: { select: { id: true, fullName: true, code: true } },
+                category: { select: { id: true, name: true, type: true } },
             },
             skip,
             take: limit,
@@ -56,15 +57,24 @@ export async function POST(request: NextRequest) {
     const body = await request.json();
     const { clanId, type, category, amount, date, personId, description, receiptUrl } = body;
 
-    if (!clanId || !type || !amount || !date) {
+    if (!clanId || !type || !amount || !date || !category) {
         return NextResponse.json(
-            { error: "clanId, type, amount, and date are required" },
+            { error: "clanId, type, amount, date, and category (id) are required" },
             { status: 400 }
         );
     }
 
-    if (!["CONTRIBUTION", "EXPENSE"].includes(type)) {
-        return NextResponse.json({ error: "Invalid type" }, { status: 400 });
+    // Verify category exists and matches type
+    const financeCategory = await prisma.financeCategory.findFirst({
+        where: { id: category, clanId }
+    });
+
+    if (!financeCategory) {
+        return NextResponse.json({ error: "Category not found" }, { status: 400 });
+    }
+
+    if (financeCategory.type !== type) {
+        return NextResponse.json({ error: "Category type mismatch" }, { status: 400 });
     }
 
     if (!hasClanAccess(user, clanId)) return forbidden();
@@ -72,8 +82,8 @@ export async function POST(request: NextRequest) {
     const transaction = await prisma.transaction.create({
         data: {
             clanId,
-            type,
-            category: category || "OTHER",
+            type: type as any,
+            categoryId: category,
             amount: Math.round(Number(amount)),
             date: new Date(date),
             personId: personId || null,
